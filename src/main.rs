@@ -71,25 +71,58 @@ impl Point {
     }
 }
 
-fn circle(c: &PointF, r: &f32, display: &mut [Pixel; WIDTH * HEIGHT]) {
-    let radius = PointF { x: *r, y: *r };
+struct Circle {
+    pos: PointF,
+    radius: f32,
+    gravity: f32,
+    vel: PointF,
+}
 
-    let b = c.sub(&radius).floor().to_i32();
-    let e = c.sum(&radius).ceil().to_i32();
+impl Circle {
+    fn update(&mut self, vel_y: f32, vel_x: f32, fps: i32) {
+        let dt = 1. / (fps as f32);
 
-    for y in b.y..=e.y {
-        for x in b.x..=e.x {
-            let p = Point { x: x, y: y }.to_f32().sum(&PointF { x: 0.5, y: 0. });
-            let d = c.sub(&p);
-            if d.to_sqrlen() <= r * r {
-                if 0 <= x && x < WIDTH as i32 && 0 <= y && y < HEIGHT as i32 {
-                    display[(y * WIDTH as i32 + x) as usize] = Pixel::FORE;
+        self.vel = self.vel.sum(&PointF {
+            x: 0.,
+            y: self.gravity * dt,
+        });
+        self.pos = self.pos.sum(&self.vel.mul(&PointF { x: dt, y: dt }));
+
+        if self.pos.y > (HEIGHT as f32 - self.radius) {
+            self.pos.y = HEIGHT as f32 - self.radius;
+            self.vel.y *= vel_y;
+        }
+
+        if self.pos.x >= (WIDTH as f32 + self.radius + (self.radius * 2.)) as f32 {
+            self.pos = PointF {
+                x: -self.radius,
+                y: -self.radius,
+            };
+            self.vel = PointF { x: vel_x, y: 0. };
+        }
+    }
+    fn render(&self, display: &mut [Pixel; WIDTH * HEIGHT]) {
+        let r = PointF {
+            x: self.radius,
+            y: self.radius,
+        };
+
+        let b = self.pos.sub(&r).floor().to_i32();
+        let e = self.pos.sum(&r).ceil().to_i32();
+
+        for y in b.y..=e.y {
+            for x in b.x..=e.x {
+                let p = Point { x: x, y: y }.to_f32().sum(&PointF { x: 0.5, y: 0. });
+                let d = self.pos.sub(&p);
+                if d.to_sqrlen() <= self.radius * self.radius {
+                    if 0 <= x && x < WIDTH as i32 && 0 <= y && y < HEIGHT as i32 {
+                        display[(y * WIDTH as i32 + x) as usize] = Pixel::FORE;
+                    }
                 }
             }
         }
     }
 }
-
 fn show(display: &[Pixel; WIDTH * HEIGHT]) {
     let mut row: [u8; WIDTH] = [0; WIDTH];
     let table = " _^C".as_bytes();
@@ -117,38 +150,21 @@ fn back() {
 
 fn main() {
     let mut display: [Pixel; WIDTH * HEIGHT];
-    let gravity = 100.;
-    let dt = 1. / 30.; // FPS (30)
 
-    let radius = (HEIGHT / 4) as f32;
-
-    let mut pos = PointF {
-        x: -radius,
-        y: -radius,
+    let mut c1 = Circle {
+        radius: (HEIGHT / 4) as f32,
+        pos: PointF {
+            x: -((HEIGHT / 4) as f32),
+            y: -((HEIGHT / 4) as f32),
+        },
+        gravity: 100.,
+        vel: PointF { x: 50., y: 0. },
     };
-    let mut vel = PointF { x: 50., y: 0. };
-
     loop {
-        vel = vel.sum(&PointF {
-            x: 0.,
-            y: gravity * dt,
-        });
-        pos = pos.sum(&vel.mul(&PointF { x: dt, y: dt }));
+        c1.update(-0.65, 50., 30);
 
-        if pos.y > (HEIGHT as f32 - radius) {
-            pos.y = HEIGHT as f32 - radius;
-            vel.y *= -0.65;
-        }
-
-        if pos.x >= (WIDTH as f32 + radius + (radius * 2.)) as f32 {
-            pos = PointF {
-                x: -radius,
-                y: -radius,
-            };
-            vel = PointF { x: 50., y: 0. };
-        }
         display = [Pixel::BACK; WIDTH * HEIGHT];
-        circle(&pos, &radius, &mut display);
+        c1.render(&mut display);
         show(&display);
         back();
 
